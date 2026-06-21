@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "env 'PROJECT_ROOT=C:\\Users\\goyal\\OneDrive\\Desktop\\bmad101' 'C:\\Users\\goyal\\OneDrive\\Desktop\\bmad101\\.claude\\skills\\bmad-story-automator\\scripts\\story-automator' stop-hook",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

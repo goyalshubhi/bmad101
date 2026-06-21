@@ -1,0 +1,85 @@
+# generated: 2026-06-18
+# last_updated: 2026-06-18T14:30:00Z
+# project: bmad101
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+#
+# BACKLOG ORDER:
+# ==============
+# Stories are ordered for an end-to-end demoable slice through the core
+# trust/verification differentiator. The critical path is:
+#   Scaffolding → CSV Ingestion → Validation Sign-Off → Questions →
+#   Narrative Gen → Verification → PPTX Render
+# Story 1.3 (Excel/JSON adapters) is deferred to last as additive
+# format support that doesn't block the demo pipeline.
+
+generated: 2026-06-18
+last_updated: 2026-06-21T23:00:00Z
+project: bmad101
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+development_status:
+  # --- Epic 1: Project Foundation & Data Ingestion ---
+  epic-1: in-progress
+  1-1-project-scaffolding-dev-environment: done
+  1-2-csv-data-ingestion-schema-detection: done
+  1-4-data-validation-review-sign-off: done
+
+  # --- Epic 2: Question Engine & Narrative Generation ---
+  epic-2: in-progress
+  2-1-question-generation-answer-parsing-service: done
+  2-2-clarifying-questions-screen: done
+  2-3-narrative-generation-service: done
+  2-4-narrative-picker-screen: done
+
+  # --- Epic 3: Figure Verification & Trust Gate ---
+  epic-3: in-progress
+  3-1-figure-extraction-reconciliation-checks-service: done
+  3-2-verification-screen-figures-checks-tabs: done
+  3-3-fix-dismiss-re-verify-flow: done
+  3-4-assumption-sign-off-gate-resolution: done
+
+  # --- Epic 4: PPTX Rendering & Deck Output ---
+  epic-4: in-progress
+  4-1-pptx-rendering-service-deck-download: done
+
+  # --- Deferred: Additional Format Adapters (not on demo critical path) ---
+  1-3-excel-json-ingestion-adapters: review
+
+  # --- Retrospectives ---
+  epic-1-retrospective: optional
+  epic-2-retrospective: optional
+  epic-3-retrospective: optional
+  epic-4-retrospective: optional
