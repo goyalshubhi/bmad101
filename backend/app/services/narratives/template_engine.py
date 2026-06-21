@@ -60,6 +60,7 @@ TEMPLATES: dict[str, str] = {
     "comparison": (
         "**{col_a}** and **{col_b}** exhibit a {direction} correlation "
         "of {correlation:.2f} across {sample_size} observations. "
+        "{col_a} averages {avg_a:.2f} while {col_b} averages {avg_b:.2f}. "
         "This suggests a meaningful {direction} relationship between "
         "these variables."
     ),
@@ -191,11 +192,15 @@ def _build_template_context(
         ctx["volatility_ratio"] = evidence.get("volatility_ratio", 0)
 
     elif angle_type == "comparison":
-        ctx["col_a"] = evidence.get("column_a", columns[0] if columns else "A")
-        ctx["col_b"] = evidence.get("column_b", columns[1] if len(columns) > 1 else "B")
+        col_a = evidence.get("column_a", columns[0] if columns else "A")
+        col_b = evidence.get("column_b", columns[1] if len(columns) > 1 else "B")
+        ctx["col_a"] = col_a
+        ctx["col_b"] = col_b
         ctx["correlation"] = evidence.get("correlation", 0)
         ctx["direction"] = evidence.get("direction", "positive")
         ctx["sample_size"] = evidence.get("sample_size", 0)
+        ctx["avg_a"] = float(pd.to_numeric(df[col_a], errors="coerce").mean()) if col_a in df.columns else 0.0
+        ctx["avg_b"] = float(pd.to_numeric(df[col_b], errors="coerce").mean()) if col_b in df.columns else 0.0
 
     elif angle_type == "anomaly":
         ctx["outlier_count"] = evidence.get("outlier_count", 0)

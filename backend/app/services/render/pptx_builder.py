@@ -51,7 +51,20 @@ class RenderContext:
     verified_at: str = ""
 
 
+class VerificationGateError(Exception):
+    """Raised when reconciliation has unresolved failures."""
+
+
 def build_pptx(context: RenderContext) -> bytes:
+    summary = context.reconciliation_summary
+    failed = summary.get("failed_count", 0)
+    dismissed = summary.get("dismissed_count", 0)
+    if failed > 0:
+        raise VerificationGateError(
+            f"Render blocked: {failed} reconciliation check(s) failed. "
+            f"Resolve or dismiss all failures before rendering."
+        )
+
     prs = Presentation()
     prs.slide_width = SLIDE_WIDTH
     prs.slide_height = SLIDE_HEIGHT

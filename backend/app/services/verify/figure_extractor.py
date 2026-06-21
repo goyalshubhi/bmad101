@@ -6,7 +6,7 @@ import re
 _FIGURE_PATTERNS = [
     re.compile(r"-?\$[\d,]+\.?\d*[KMB]?"),
     re.compile(r"-?\d+[.,]\d+%"),
-    re.compile(r"-?\d{2,}[.,]\d+"),
+    re.compile(r"-?\d+[.,]\d+(?!%)"),
     re.compile(r"(?<![.\d])-?\d{3,}(?!\d)"),
 ]
 
@@ -14,6 +14,15 @@ _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 
 _YEAR_PATTERN = re.compile(r"^-?\d{4}$")
 _LIKELY_NON_FINANCIAL = re.compile(r"^(19|20)\d{2}$")
+
+_STAT_PREFIX = re.compile(
+    r"(?:correlation\s+of|R-squared\s+of|R²\s*[=:]\s*|across)\s*$",
+    re.IGNORECASE,
+)
+_STAT_SUFFIX = re.compile(
+    r"^\s*(?:observations|standard\s+deviations?)",
+    re.IGNORECASE,
+)
 
 
 def _is_likely_non_financial(value: str) -> bool:
@@ -23,6 +32,12 @@ def _is_likely_non_financial(value: str) -> bool:
     if bare.isdigit() and len(bare) <= 2:
         return True
     return False
+
+
+def _is_statistical_metadata(value: str, text: str, start: int) -> bool:
+    prefix = text[max(0, start - 30):start]
+    suffix = text[start + len(value):start + len(value) + 30]
+    return bool(_STAT_PREFIX.search(prefix) or _STAT_SUFFIX.match(suffix))
 
 
 def _find_sentence(text: str, start: int, end: int) -> str:
@@ -48,6 +63,8 @@ def extract_figures(narrative_text: str) -> list[dict]:
         for match in pattern.finditer(narrative_text):
             value = match.group()
             if _is_likely_non_financial(value):
+                continue
+            if _is_statistical_metadata(value, narrative_text, match.start()):
                 continue
             context_sentence = _find_sentence(narrative_text, match.start(), match.end())
             key = (value, context_sentence)
