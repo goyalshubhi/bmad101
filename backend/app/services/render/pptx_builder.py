@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -89,6 +90,13 @@ def _add_slide_notes(slide, context: RenderContext) -> None:
     )
 
 
+_MD_BOLD = re.compile(r"\*\*(.+?)\*\*")
+
+
+def _strip_markdown(text: str) -> str:
+    return _MD_BOLD.sub(r"\1", text)
+
+
 def _set_text_props(run, size=BODY_SIZE, color=DARK_TEXT, bold=False):
     run.font.size = size
     run.font.color.rgb = color
@@ -137,7 +145,8 @@ def _add_executive_summary_slide(prs: Presentation, context: RenderContext) -> N
     run_a.text = f"Story Angle: {(context.story_angle or '').replace('_', ' ').title()}"
     _set_text_props(run_a, size=SUBTITLE_SIZE, color=ACCENT_BLUE, bold=True)
 
-    sentences = (context.narrative_text or "").replace("\n", " ").split(". ")
+    clean_text = _strip_markdown((context.narrative_text or "").replace("\n", " "))
+    sentences = clean_text.split(". ")
     summary = ". ".join(sentences[:2]).strip()
     if summary and not summary.endswith("."):
         summary += "."

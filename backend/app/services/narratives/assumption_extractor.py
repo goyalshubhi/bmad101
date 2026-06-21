@@ -49,7 +49,13 @@ def extract_assumptions(
     # 3. INFERRED assumptions -- contextual inferences
     assumptions.extend(_inferred_assumptions(df, angles, parsed_answers))
 
-    return assumptions
+    seen_texts: set[str] = set()
+    deduped: list[dict] = []
+    for a in assumptions:
+        if a["text"] not in seen_texts:
+            seen_texts.add(a["text"])
+            deduped.append(a)
+    return deduped
 
 
 def _explicit_assumptions(df: pd.DataFrame, angles: list[dict]) -> list[dict]:

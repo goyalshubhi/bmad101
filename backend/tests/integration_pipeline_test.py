@@ -589,6 +589,10 @@ def run_scenario_3():
             "dismissed_count": 0,
         }
 
+        qa_pairs = []
+        for q, a in zip(questions, answers):
+            qa_pairs.append({"question": q["template"], "answer": a["text"]})
+
         ctx = RenderContext(
             deck_name="Edge Case Test",
             data_source_filename="edge_case.csv",
@@ -597,6 +601,7 @@ def run_scenario_3():
             story_angle=selected["story_angle"],
             viz_recommendation=selected.get("viz_recommendation"),
             assumptions=assumptions,
+            questions_and_answers=qa_pairs,
             quality_notes=[{"severity": issue["severity"], "description": issue["description"]}
                            for issue in quality["quality_issues"]],
             reconciliation_summary=recon_summary,
