@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AppShell from "../layouts/AppShell";
-import { apiFetch, ApiError } from "../api/client";
+import { apiFetch, ApiError, BASE_URL } from "../api/client";
 
 type RenderResponse = {
   deck_id: string;
@@ -80,7 +80,7 @@ export default function RenderScreen() {
     setDownloading(true);
     try {
       const link = document.createElement("a");
-      link.href = `/api/v1/decks/${deckId}/render/download`;
+      link.href = `${BASE_URL}/api/v1/decks/${deckId}/render/download`;
       link.download = `deck_v${renderResult?.version || 1}.pptx`;
       document.body.appendChild(link);
       link.click();

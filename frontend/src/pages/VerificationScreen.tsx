@@ -9,7 +9,7 @@ import ChecksList from "../components/verify/ChecksList";
 import GateStatusBar from "../components/verify/GateStatusBar";
 import DismissModal from "../components/verify/DismissModal";
 import AssumptionsList from "../components/verify/AssumptionsList";
-import { apiFetch, ApiError } from "../api/client";
+import { apiFetch, ApiError, BASE_URL } from "../api/client";
 import type { VerifyResponse, FigureTrace, SourceRowsResponse } from "../types/verify";
 
 const pipelineSteps = () => [
@@ -271,7 +271,7 @@ export default function VerificationScreen() {
   const handleDownloadPptx = () => {
     if (!deckId) return;
     const link = document.createElement("a");
-    link.href = `/api/v1/decks/${deckId}/render/download`;
+    link.href = `${BASE_URL}/api/v1/decks/${deckId}/render/download`;
     link.download = "deck.pptx";
     document.body.appendChild(link);
     link.click();
