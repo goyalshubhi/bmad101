@@ -2,7 +2,6 @@ import asyncio
 import logging
 import uuid
 
-from botocore.exceptions import ClientError
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func as sa_func
@@ -235,18 +234,10 @@ async def download_deck(deck_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     if not pptx_url:
         raise HTTPException(status_code=404, detail="Rendered deck has no storage URL")
 
-    if pptx_url.startswith("s3://"):
-        parts = pptx_url.split("/", 3)
-        object_key = parts[3] if len(parts) > 3 else ""
-        if not object_key:
-            raise HTTPException(status_code=500, detail="Malformed storage URL")
-    else:
-        object_key = pptx_url
-
     try:
-        pptx_bytes = await asyncio.to_thread(download_file, object_key)
-    except ClientError:
-        logger.exception("S3 download failed for key %s", object_key)
+        pptx_bytes = await asyncio.to_thread(download_file, pptx_url)
+    except Exception:
+        logger.exception("Download failed for %s", pptx_url)
         raise HTTPException(status_code=502, detail="Failed to retrieve file from storage")
 
     if pptx_bytes is None:

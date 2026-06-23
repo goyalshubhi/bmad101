@@ -3,19 +3,35 @@ import { useParams, useNavigate } from "react-router-dom";
 import AppShell from "../layouts/AppShell";
 import { apiFetch, ApiError } from "../api/client";
 
+type QualityIssue = { severity: string; description: string; count: number; sample_rows?: number[] };
+
+type SchemaColumn = { name: string; type: string; nullable_pct: number };
+
 type IngestStatus = {
   ingest_job_id: string;
-  schema: {
-    columns: { name: string; type: string; nullable_pct: number }[];
-    row_count: number;
-  } | null;
+  schema: Record<string, { type: string; nullability?: number; cardinality?: number }> | null;
   quality_report: {
     status: string;
-    issues: { severity: string; description: string; count: number; sample_rows: number[] }[];
+    quality_issues?: QualityIssue[];
+    issues?: QualityIssue[];
   } | null;
   status: string;
   validated_at: string | null;
 };
+
+function getIssues(report: IngestStatus["quality_report"]): QualityIssue[] {
+  if (!report) return [];
+  return report.quality_issues ?? report.issues ?? [];
+}
+
+function getColumns(schema: IngestStatus["schema"]): SchemaColumn[] {
+  if (!schema || Array.isArray(schema)) return [];
+  return Object.entries(schema).map(([name, info]) => ({
+    name,
+    type: info.type ?? "unknown",
+    nullable_pct: info.nullability ?? 0,
+  }));
+}
 
 const pipelineSteps = (status: string) => [
   { label: "Ingest", status: (status === "CLEAN" || status === "ISSUES_ACKNOWLEDGED") ? "completed" as const : "active" as const },
@@ -117,84 +133,90 @@ export default function ValidationReview() {
       </h1>
 
       {/* Status Banner */}
-      <StatusBanner status={data.status} issueCount={data.quality_report?.issues?.length || 0} />
+      <StatusBanner status={data.status} issueCount={getIssues(data.quality_report).length} />
 
       {/* Schema Summary */}
-      {data.schema && (
-        <section style={{ marginTop: 24 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, color: "#111827", marginBottom: 12 }}>
-            Schema Summary
-          </h2>
-          <p style={{ color: "#6b7280", marginBottom: 12 }}>
-            {data.schema.row_count} rows, {data.schema.columns.length} columns
-          </p>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
-            <thead>
-              <tr style={{ borderBottom: "2px solid #e5e7eb", textAlign: "left" }}>
-                <th style={{ padding: "8px 12px", color: "#6b7280" }}>Column</th>
-                <th style={{ padding: "8px 12px", color: "#6b7280" }}>Type</th>
-                <th style={{ padding: "8px 12px", color: "#6b7280" }}>Nullable %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.schema.columns.map((col) => (
-                <tr key={col.name} style={{ borderBottom: "1px solid #f3f4f6" }}>
-                  <td style={{ padding: "8px 12px", fontWeight: 500 }}>{col.name}</td>
-                  <td style={{ padding: "8px 12px", color: "#6b7280" }}>{col.type}</td>
-                  <td style={{ padding: "8px 12px", color: "#6b7280" }}>{(col.nullable_pct * 100).toFixed(1)}%</td>
+      {data.schema && (() => {
+        const columns = getColumns(data.schema);
+        return columns.length > 0 ? (
+          <section style={{ marginTop: 24 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, color: "#111827", marginBottom: 12 }}>
+              Schema Summary
+            </h2>
+            <p style={{ color: "#6b7280", marginBottom: 12 }}>
+              {columns.length} columns detected
+            </p>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #e5e7eb", textAlign: "left" }}>
+                  <th style={{ padding: "8px 12px", color: "#6b7280" }}>Column</th>
+                  <th style={{ padding: "8px 12px", color: "#6b7280" }}>Type</th>
+                  <th style={{ padding: "8px 12px", color: "#6b7280" }}>Nullable %</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      )}
+              </thead>
+              <tbody>
+                {columns.map((col) => (
+                  <tr key={col.name} style={{ borderBottom: "1px solid #f3f4f6" }}>
+                    <td style={{ padding: "8px 12px", fontWeight: 500 }}>{col.name}</td>
+                    <td style={{ padding: "8px 12px", color: "#6b7280" }}>{col.type}</td>
+                    <td style={{ padding: "8px 12px", color: "#6b7280" }}>{(col.nullable_pct * 100).toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ) : null;
+      })()}
 
       {/* Quality Issues */}
-      {(data.quality_report?.issues?.length ?? 0) > 0 && (
-        <section style={{ marginTop: 24 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, color: "#111827", marginBottom: 12 }}>
-            Quality Issues
-          </h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {data.quality_report!.issues.map((issue, i) => (
-              <div
-                key={i}
-                style={{
-                  padding: 16,
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 8,
-                  borderLeft: `4px solid ${severityColor[issue.severity] || "#9ca3af"}`,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      textTransform: "uppercase",
-                      color: "#fff",
-                      background: severityColor[issue.severity] || "#9ca3af",
-                      padding: "2px 8px",
-                      borderRadius: 4,
-                    }}
-                  >
-                    {issue.severity}
-                  </span>
-                  <span style={{ fontSize: 14, color: "#6b7280" }}>
-                    {issue.count} occurrence{issue.count !== 1 ? "s" : ""}
-                  </span>
+      {(() => {
+        const issues = getIssues(data.quality_report);
+        return issues.length > 0 ? (
+          <section style={{ marginTop: 24 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, color: "#111827", marginBottom: 12 }}>
+              Quality Issues
+            </h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {issues.map((issue, i) => (
+                <div
+                  key={i}
+                  style={{
+                    padding: 16,
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 8,
+                    borderLeft: `4px solid ${severityColor[issue.severity] || "#9ca3af"}`,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                        color: "#fff",
+                        background: severityColor[issue.severity] || "#9ca3af",
+                        padding: "2px 8px",
+                        borderRadius: 4,
+                      }}
+                    >
+                      {issue.severity}
+                    </span>
+                    <span style={{ fontSize: 14, color: "#6b7280" }}>
+                      {issue.count} occurrence{issue.count !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: 14, color: "#111827", margin: 0 }}>{issue.description}</p>
+                  {(issue.sample_rows?.length ?? 0) > 0 && (
+                    <p style={{ fontSize: 12, color: "#9ca3af", margin: "4px 0 0" }}>
+                      Sample rows: {issue.sample_rows!.join(", ")}
+                    </p>
+                  )}
                 </div>
-                <p style={{ fontSize: 14, color: "#111827", margin: 0 }}>{issue.description}</p>
-                {issue.sample_rows.length > 0 && (
-                  <p style={{ fontSize: 12, color: "#9ca3af", margin: "4px 0 0" }}>
-                    Sample rows: {issue.sample_rows.join(", ")}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+              ))}
+            </div>
+          </section>
+        ) : null;
+      })()}
 
       {/* Action Buttons */}
       <div style={{ marginTop: 32, display: "flex", gap: 12 }}>

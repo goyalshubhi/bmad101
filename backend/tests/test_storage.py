@@ -1,36 +1,30 @@
-from unittest.mock import patch, MagicMock
-
 import pytest
 
-from app.services.storage import upload_file
+from app.services.storage import upload_file, download_file
 
 
 @pytest.mark.asyncio
-async def test_upload_file():
-    with patch("app.services.storage.boto3") as mock_boto3:
-        mock_s3 = MagicMock()
-        mock_boto3.client.return_value = mock_s3
-        mock_s3.head_bucket.return_value = {}
+async def test_upload_file(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.storage.UPLOADS_DIR", tmp_path)
 
-        result = await upload_file(b"test data", "test.csv")
+    result = await upload_file(b"test data", "test.csv")
 
-        assert result.startswith("s3://")
-        assert "test.csv" in result
-        mock_s3.put_object.assert_called_once()
+    assert result.startswith("local://")
+    assert "test.csv" in result
 
 
 @pytest.mark.asyncio
-async def test_upload_creates_bucket_if_missing():
-    from botocore.exceptions import ClientError
+async def test_upload_and_download_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.storage.UPLOADS_DIR", tmp_path)
 
-    with patch("app.services.storage.boto3") as mock_boto3:
-        mock_s3 = MagicMock()
-        mock_boto3.client.return_value = mock_s3
-        mock_s3.head_bucket.side_effect = ClientError(
-            {"Error": {"Code": "404"}}, "HeadBucket"
-        )
+    url = await upload_file(b"hello world", "data.csv")
+    data = download_file(url)
 
-        result = await upload_file(b"test data", "test.csv")
+    assert data == b"hello world"
 
-        mock_s3.create_bucket.assert_called_once()
-        assert result.startswith("s3://")
+
+def test_download_missing_file(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.storage.UPLOADS_DIR", tmp_path)
+
+    result = download_file("local://nonexistent/file.csv")
+    assert result is None

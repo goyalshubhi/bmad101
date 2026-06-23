@@ -2,23 +2,20 @@ import asyncio
 
 from fastapi import APIRouter
 from sqlalchemy import text
-import boto3
 
 from app.core.database import engine
-from app.core.redis import redis_client
+from app.core.redis import get_redis
 from app.core.config import settings
 
 router = APIRouter()
 
 
-def _check_minio() -> None:
-    s3 = boto3.client(
-        "s3",
-        endpoint_url=f"http://{settings.MINIO_ENDPOINT}",
-        aws_access_key_id=settings.MINIO_ACCESS_KEY,
-        aws_secret_access_key=settings.MINIO_SECRET_KEY,
-    )
-    s3.list_buckets()
+def _check_storage() -> None:
+    from pathlib import Path
+    uploads = Path(settings.UPLOADS_DIR)
+    uploads.mkdir(parents=True, exist_ok=True)
+    if not uploads.is_dir():
+        raise RuntimeError("Uploads directory is not accessible")
 
 
 @router.get("/health")
@@ -28,22 +25,24 @@ async def health_check():
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
-        services["postgres"] = "up"
+        services["database"] = "up"
     except Exception:
-        services["postgres"] = "down"
+        services["database"] = "down"
 
     try:
-        await redis_client.ping()
+        redis = await get_redis()
+        await redis.ping()
         services["redis"] = "up"
     except Exception:
-        services["redis"] = "down"
+        services["redis"] = "unavailable (optional)"
 
     try:
-        await asyncio.to_thread(_check_minio)
-        services["minio"] = "up"
+        await asyncio.to_thread(_check_storage)
+        services["storage"] = "up (local filesystem)"
     except Exception:
-        services["minio"] = "down"
+        services["storage"] = "down"
 
-    status = "ok" if all(v == "up" for v in services.values()) else "degraded"
+    required_up = services.get("database") == "up"
+    status = "ok" if required_up else "degraded"
 
     return {"status": status, "services": services}
