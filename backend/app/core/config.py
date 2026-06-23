@@ -13,7 +13,10 @@ class Settings(BaseSettings):
 
     @property
     def sync_database_url(self) -> str:
-        return self.DATABASE_URL.replace("+aiosqlite", "")
+        url = self.DATABASE_URL
+        url = url.replace("+aiosqlite", "")
+        url = url.replace("+asyncpg", "")
+        return url
 
     model_config = {"env_file": [".env.local", ".env"], "extra": "ignore"}
 

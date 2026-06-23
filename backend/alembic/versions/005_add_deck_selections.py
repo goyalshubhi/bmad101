@@ -8,7 +8,6 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
 
 revision: str = "005"
 down_revision: Union[str, None] = "004"
@@ -19,9 +18,9 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.create_table(
         "deck_selections",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("deck_id", UUID(as_uuid=True), sa.ForeignKey("decks.id"), nullable=False),
-        sa.Column("narrative_id", UUID(as_uuid=True), sa.ForeignKey("narratives.id"), nullable=False),
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column("deck_id", sa.String(36), sa.ForeignKey("decks.id"), nullable=False),
+        sa.Column("narrative_id", sa.String(36), sa.ForeignKey("narratives.id"), nullable=False),
         sa.Column("user_edits_text", sa.Text, nullable=True),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime, server_default=sa.func.now()),

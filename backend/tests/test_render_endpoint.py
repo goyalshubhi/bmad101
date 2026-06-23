@@ -29,6 +29,7 @@ def _build_mock_db(deck_id, narrative_id, *, has_selection=True, has_deck_output
     mock_selection.deck_id = deck_id
     mock_selection.narrative_id = narrative_id
     mock_selection.user_edits_text = None
+    mock_selection.updated_at = datetime(2026, 6, 21, 12, 0, 0)
 
     mock_narrative = MagicMock()
     mock_narrative.id = narrative_id
@@ -84,9 +85,9 @@ def _mock_render_db(deck_id, narrative_id, *, has_selection=True, has_verificati
         call_count["n"] += 1
         n = call_count["n"]
         if n == 1:
-            return _make_result(mocks["verification"])
-        elif n == 2:
             return _make_result(mocks["selection"])
+        elif n == 2:
+            return _make_result(mocks["verification"])
         elif n == 3:
             return _make_result(mocks["narrative"])
         elif n == 4:

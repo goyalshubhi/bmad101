@@ -8,7 +8,6 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 revision: str = "006"
 down_revision: Union[str, None] = "005"
@@ -19,13 +18,13 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.create_table(
         "reconciliation_reports",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("deck_id", UUID(as_uuid=True), sa.ForeignKey("decks.id"), nullable=False),
-        sa.Column("narrative_id", UUID(as_uuid=True), sa.ForeignKey("narratives.id"), nullable=False),
-        sa.Column("parent_report_id", UUID(as_uuid=True), sa.ForeignKey("reconciliation_reports.id"), nullable=True),
-        sa.Column("checks_json", JSONB, nullable=True),
-        sa.Column("figure_traces", JSONB, nullable=True),
-        sa.Column("assumption_actions_json", JSONB, nullable=True),
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column("deck_id", sa.String(36), sa.ForeignKey("decks.id"), nullable=False),
+        sa.Column("narrative_id", sa.String(36), sa.ForeignKey("narratives.id"), nullable=False),
+        sa.Column("parent_report_id", sa.String(36), sa.ForeignKey("reconciliation_reports.id"), nullable=True),
+        sa.Column("checks_json", sa.Text, nullable=True),
+        sa.Column("figure_traces", sa.Text, nullable=True),
+        sa.Column("assumption_actions_json", sa.Text, nullable=True),
         sa.Column("passed", sa.Boolean, nullable=False),
         sa.Column("verified_at", sa.DateTime, server_default=sa.func.now()),
     )

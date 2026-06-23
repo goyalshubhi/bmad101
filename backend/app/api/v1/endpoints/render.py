@@ -2,7 +2,7 @@ import asyncio
 import logging
 import uuid
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func as sa_func
 from sqlalchemy.exc import IntegrityError
@@ -83,22 +83,28 @@ def _merge_qa(questions_json: list | None, answers_json: list | None) -> list[di
 
 
 @router.post("/decks/{deck_id}/render", response_model=RenderResponse)
-async def render_deck(deck_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    verification_result = await db.execute(
-        select(AuditLog).where(
-            AuditLog.deck_id == deck_id,
-            AuditLog.action == "verification_completed",
-        ).limit(1)
-    )
-    if not verification_result.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Verification must be completed before rendering")
-
+async def render_deck(
+    deck_id: uuid.UUID,
+    skip_verification: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+):
     selection_result = await db.execute(
-        select(DeckSelection).where(DeckSelection.deck_id == deck_id)
+        select(DeckSelection).where(DeckSelection.deck_id == deck_id).limit(1)
     )
     selection = selection_result.scalar_one_or_none()
     if not selection:
         raise HTTPException(status_code=404, detail="No narrative selected for this deck")
+
+    if not skip_verification:
+        verification_result = await db.execute(
+            select(AuditLog).where(
+                AuditLog.deck_id == deck_id,
+                AuditLog.action == "verification_completed",
+                AuditLog.created_at >= selection.updated_at,
+            ).order_by(AuditLog.created_at.desc()).limit(1)
+        )
+        if not verification_result.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Verification must be completed before rendering")
 
     narrative_result = await db.execute(
         select(Narrative).where(Narrative.id == selection.narrative_id)
@@ -167,7 +173,13 @@ async def render_deck(deck_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         verified_at=verified_at_str,
     )
 
-    pptx_bytes = await asyncio.to_thread(build_pptx, context)
+    try:
+        pptx_bytes = await asyncio.to_thread(build_pptx, context, skip_verification=skip_verification)
+    except VerificationGateError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception:
+        logger.exception("PPTX build failed for deck %s", deck_id)
+        raise HTTPException(status_code=500, detail="Failed to build PPTX")
 
     max_retries = 3
     for attempt in range(max_retries):

@@ -1,15 +1,21 @@
 import io
+import logging
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.deck import Deck
-from app.models.ingest_job import IngestJob
 from app.models.audit_log import AuditLog
+from app.models.deck import Deck
+from app.models.deck_output import DeckOutput
+from app.models.deck_selection import DeckSelection
+from app.models.ingest_job import IngestJob
+from app.models.narrative import Narrative
+from app.models.question_session import QuestionSession
+from app.models.reconciliation_report import ReconciliationReport
 from app.services.ingest.adapter_factory import get_adapter
 from app.services.ingest.quality_checker import run_quality_checks
 from app.services.storage import upload_file
@@ -19,6 +25,8 @@ from app.api.v1.schemas.ingest import (
     AcknowledgeRequest,
     AcknowledgeResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -57,8 +65,32 @@ async def ingest_file(
     except Exception:
         raise HTTPException(status_code=400, detail="Failed to parse file. Ensure it is a valid format.")
 
+    # Invalidate all downstream artifacts from prior ingestions.
+    # Deletion order respects FK constraints (children first).
+    await db.execute(delete(DeckOutput).where(DeckOutput.deck_id == deck_id))
+    await db.execute(
+        delete(ReconciliationReport).where(ReconciliationReport.deck_id == deck_id)
+    )
+    await db.execute(delete(DeckSelection).where(DeckSelection.deck_id == deck_id))
+    await db.execute(delete(Narrative).where(Narrative.deck_id == deck_id))
+    await db.execute(
+        delete(QuestionSession).where(QuestionSession.deck_id == deck_id)
+    )
+    await db.execute(
+        delete(AuditLog).where(
+            AuditLog.deck_id == deck_id,
+            AuditLog.action.in_([
+                "verification_completed",
+                "verification_run",
+                "deck_rendered",
+            ]),
+        )
+    )
+    logger.info("Invalidated downstream artifacts for deck %s on re-ingest", deck_id)
+
     status = quality_result["status"]
 
+    validated_at = datetime.now(timezone.utc) if status == "CLEAN" else None
     job = IngestJob(
         deck_id=deck_id,
         file_url=file_url,

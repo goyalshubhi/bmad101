@@ -8,7 +8,6 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
 
 revision: str = "007"
 down_revision: Union[str, None] = "006"
@@ -17,9 +16,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.alter_column("audit_log", "user_id", existing_type=UUID(as_uuid=True), nullable=True)
+    with op.batch_alter_table("audit_log") as batch_op:
+        batch_op.alter_column("user_id", existing_type=sa.String(36), nullable=True)
 
 
 def downgrade() -> None:
     op.execute("DELETE FROM audit_log WHERE user_id IS NULL")
-    op.alter_column("audit_log", "user_id", existing_type=UUID(as_uuid=True), nullable=False)
+    with op.batch_alter_table("audit_log") as batch_op:
+        batch_op.alter_column("user_id", existing_type=sa.String(36), nullable=False)

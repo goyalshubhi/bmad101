@@ -56,11 +56,11 @@ class VerificationGateError(Exception):
     """Raised when reconciliation has unresolved failures."""
 
 
-def build_pptx(context: RenderContext) -> bytes:
+def build_pptx(context: RenderContext, *, skip_verification: bool = False) -> bytes:
     summary = context.reconciliation_summary
     failed = summary.get("failed_count", 0)
     dismissed = summary.get("dismissed_count", 0)
-    if failed > 0:
+    if failed > 0 and not skip_verification:
         raise VerificationGateError(
             f"Render blocked: {failed} reconciliation check(s) failed. "
             f"Resolve or dismiss all failures before rendering."

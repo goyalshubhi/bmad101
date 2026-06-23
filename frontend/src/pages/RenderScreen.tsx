@@ -72,6 +72,7 @@ export default function RenderScreen() {
 
     return () => {
       cancelled = true;
+      renderFiredRef.current = false;
     };
   }, [deckId]);
 
