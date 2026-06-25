@@ -6,6 +6,14 @@ type DismissModalProps = {
   onCancel: () => void;
 };
 
+const FRIENDLY_CHECK_NAMES: Record<string, string> = {
+  check_a: "Sum of Parts",
+  check_b: "Data Consistency",
+  check_c: "Time Series Continuity",
+  check_d: "Comparison Validity",
+  check_e: "Statistical Significance",
+};
+
 export default function DismissModal({ checkName, onConfirm, onCancel }: DismissModalProps) {
   const [reason, setReason] = useState("");
   const [accepted, setAccepted] = useState(false);
@@ -77,7 +85,7 @@ export default function DismissModal({ checkName, onConfirm, onCancel }: Dismiss
           id="dismiss-modal-heading"
           style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16 }}
         >
-          Dismiss Check {checkName}
+          Dismiss: {FRIENDLY_CHECK_NAMES[checkName] || checkName}
         </h2>
 
         <label style={{ display: "block", fontSize: 14, fontWeight: 500, color: "#374151", marginBottom: 6 }}>
@@ -117,7 +125,7 @@ export default function DismissModal({ checkName, onConfirm, onCancel }: Dismiss
             onChange={(e) => setAccepted(e.target.checked)}
             style={{ width: 16, height: 16 }}
           />
-          I accept responsibility for dismissing this check
+          I understand this check will be skipped in the final report
         </label>
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>

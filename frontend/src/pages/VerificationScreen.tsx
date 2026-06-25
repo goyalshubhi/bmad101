@@ -11,14 +11,7 @@ import DismissModal from "../components/verify/DismissModal";
 import AssumptionsList from "../components/verify/AssumptionsList";
 import { apiFetch, ApiError, BASE_URL } from "../api/client";
 import type { VerifyResponse, FigureTrace, SourceRowsResponse } from "../types/verify";
-
-const pipelineSteps = () => [
-  { label: "Ingest", status: "completed" as const },
-  { label: "Questions", status: "completed" as const },
-  { label: "Narratives", status: "completed" as const },
-  { label: "Verify", status: "active" as const },
-  { label: "Render", status: "inactive" as const },
-];
+import { buildPipelineSteps } from "../constants/pipelineSteps";
 
 export default function VerificationScreen() {
   const { deckId } = useParams<{ deckId: string }>();
@@ -36,9 +29,14 @@ export default function VerificationScreen() {
   const [dismissingCheck, setDismissingCheck] = useState<string | null>(null);
   const [dismissSubmitting, setDismissSubmitting] = useState(false);
 
-  const [loadingProgress, setLoadingProgress] = useState(0);
   const liveRegionRef = useRef<HTMLDivElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   const announce = (message: string) => {
     if (liveRegionRef.current) {
@@ -53,33 +51,28 @@ export default function VerificationScreen() {
     setLoading(true);
     setError(null);
     setVerifyResponse(null);
-    setLoadingProgress(0);
-
-    const checkNames = ["Sum of Parts", "Data Consistency", "Time Series Continuity", "Comparison Validity", "Statistical Significance"];
-    let progressTimer: ReturnType<typeof setInterval> | null = null;
 
     if (!isReadonly) {
-      announce("Running 5 reconciliation checks...");
-      let step = 0;
-      progressTimer = setInterval(() => {
-        step++;
-        if (step <= 5) {
-          setLoadingProgress(step);
-          announce(`Running check ${step}/5: ${checkNames[step - 1]}...`);
-        }
-      }, 600);
+      announce("Running reconciliation checks...");
     } else {
       announce("Loading verification results...");
     }
 
     (async () => {
       try {
-        const result = await apiFetch<VerifyResponse>(`/api/v1/decks/${deckId}/verify`, {
-          method: "POST",
-        });
+        let result: VerifyResponse;
+        if (isReadonly) {
+          result = await apiFetch<VerifyResponse>(`/api/v1/decks/${deckId}/verify`);
+        } else {
+          try {
+            result = await apiFetch<VerifyResponse>(`/api/v1/decks/${deckId}/verify`);
+          } catch {
+            result = await apiFetch<VerifyResponse>(`/api/v1/decks/${deckId}/verify`, {
+              method: "POST",
+            });
+          }
+        }
         if (cancelled) return;
-        if (progressTimer) clearInterval(progressTimer);
-        setLoadingProgress(5);
         setVerifyResponse(result);
         if (!isReadonly) {
           announce(
@@ -90,7 +83,6 @@ export default function VerificationScreen() {
         }
       } catch (e) {
         if (!cancelled) {
-          if (progressTimer) clearInterval(progressTimer);
           setError(e instanceof ApiError ? e.message : "Failed to run verification");
         }
       } finally {
@@ -100,7 +92,6 @@ export default function VerificationScreen() {
 
     return () => {
       cancelled = true;
-      if (progressTimer) clearInterval(progressTimer);
     };
   }, [deckId, isReadonly]);
 
@@ -204,10 +195,6 @@ export default function VerificationScreen() {
     }
   };
 
-  const handleExcludeRows = (_figure: FigureTrace) => {
-    showToast("Row exclusion requires selecting specific rows in the source data panel. Use 'View source rows' first.");
-  };
-
   const handleAssumptionAction = async (index: number, action: string) => {
     if (!deckId || !verifyResponse) return;
     const result = await apiFetch<VerifyResponse>(`/api/v1/decks/${deckId}/verify/assumption-action`, {
@@ -241,6 +228,7 @@ export default function VerificationScreen() {
 
   const handleChallenge = (index: number) => {
     if (!deckId || !verifyResponse || challengeSubmitting) return;
+    if (!window.confirm("This will navigate to the narrative editor. Unsaved verification changes may be lost. Continue?")) return;
     setChallengeSubmitting(true);
     handleAssumptionAction(index, "rejected")
       .then(() => navigate(`/decks/${deckId}/narratives?highlight=assumption-${index}`))
@@ -250,6 +238,7 @@ export default function VerificationScreen() {
 
   const handleReject = async (index: number) => {
     if (!deckId || !verifyResponse) return;
+    if (!window.confirm("This will navigate to the narrative editor. Unsaved verification changes may be lost. Continue?")) return;
     try {
       await handleAssumptionAction(index, "rejected");
       navigate(`/decks/${deckId}/narratives?highlight=assumption-${index}`);
@@ -286,7 +275,7 @@ export default function VerificationScreen() {
 
   if (loading) {
     return (
-      <AppShell steps={pipelineSteps()}>
+      <AppShell steps={buildPipelineSteps(3)}>
         <div
           ref={liveRegionRef}
           aria-live="polite"
@@ -317,15 +306,10 @@ export default function VerificationScreen() {
             }}
           />
           <p style={{ fontSize: 16, color: "#374151", fontWeight: 500 }}>
-            Running reconciliation checks... {loadingProgress > 0 && `(${loadingProgress}/5)`}
+            Running reconciliation checks...
           </p>
           <p style={{ fontSize: 13, color: "#6b7280" }}>
-            {loadingProgress === 0 && "Preparing verification..."}
-            {loadingProgress === 1 && "Checking sum of parts..."}
-            {loadingProgress === 2 && "Checking data consistency..."}
-            {loadingProgress === 3 && "Checking time series continuity..."}
-            {loadingProgress === 4 && "Checking comparison validity..."}
-            {loadingProgress === 5 && "Checking statistical significance..."}
+            This may take a few moments
           </p>
         </div>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -335,7 +319,7 @@ export default function VerificationScreen() {
 
   if (error) {
     return (
-      <AppShell steps={pipelineSteps()}>
+      <AppShell steps={buildPipelineSteps(3)}>
         <div style={{ padding: 24, background: "#fef2f2", borderRadius: 8, color: "#991b1b" }}>
           {error}
         </div>
@@ -361,7 +345,7 @@ export default function VerificationScreen() {
   }).length;
 
   return (
-    <AppShell steps={pipelineSteps()}>
+    <AppShell steps={buildPipelineSteps(3)}>
       <div
         ref={liveRegionRef}
         aria-live="polite"
@@ -408,8 +392,9 @@ export default function VerificationScreen() {
         passed={verifyResponse.passed}
         failCount={failedCheckCount}
         totalChecks={Object.keys(verifyResponse.checks).length}
+        unsignedAssumptionCount={unsignedAssumptionCount}
         mode={isReadonly ? "readonly" : "blocking"}
-        verifiedAt={isReadonly ? verifyResponse.report_id : undefined}
+        verifiedAt={isReadonly && verifyResponse.verified_at ? new Date(verifyResponse.verified_at).toLocaleString() : undefined}
       />
 
       <TabBar
@@ -438,7 +423,6 @@ export default function VerificationScreen() {
             figureTraces={verifyResponse.figure_traces}
             onViewSource={handleViewSource}
             onEditNarrative={handleEditNarrative}
-            onExcludeRows={handleExcludeRows}
           />
         )}
       </div>

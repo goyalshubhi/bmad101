@@ -2,14 +2,7 @@ import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "../layouts/AppShell";
 import { apiFetch, ApiError, BASE_URL } from "../api/client";
-
-const pipelineSteps = () => [
-  { label: "Ingest", status: "active" as const },
-  { label: "Questions", status: "inactive" as const },
-  { label: "Narratives", status: "inactive" as const },
-  { label: "Verify", status: "inactive" as const },
-  { label: "Render", status: "inactive" as const },
-];
+import { buildPipelineSteps } from "../constants/pipelineSteps";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -17,16 +10,23 @@ export default function Home() {
 
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const uploadingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const acceptedTypes = [".csv", ".xlsx", ".xls", ".json"];
+  const acceptedTypes = [".csv", ".xlsx", ".json"];
+
+  const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
   const handleFileSelect = (selected: File | null) => {
     if (!selected) return;
     const ext = "." + selected.name.split(".").pop()?.toLowerCase();
     if (!acceptedTypes.includes(ext)) {
       setError(`Unsupported file type. Please upload: ${acceptedTypes.join(", ")}`);
+      return;
+    }
+    if (selected.size > MAX_FILE_SIZE) {
+      setError("File is too large. Maximum size is 100 MB.");
       return;
     }
     setFile(selected);
@@ -41,7 +41,8 @@ export default function Home() {
   };
 
   const handleUpload = async () => {
-    if (!file || uploading) return;
+    if (!file || uploading || uploadingRef.current) return;
+    uploadingRef.current = true;
     setUploading(true);
     setError(null);
 
@@ -68,12 +69,13 @@ export default function Home() {
       navigate(`/decks/${deck.id}/validate`);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Upload failed. Please try again.");
+      uploadingRef.current = false;
       setUploading(false);
     }
   };
 
   return (
-    <AppShell steps={pipelineSteps()}>
+    <AppShell steps={buildPipelineSteps(0)}>
       <h1 style={{ fontSize: 24, fontWeight: 700, color: "#111827", marginBottom: 8 }}>
         Deck Generation System
       </h1>

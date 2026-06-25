@@ -6,6 +6,8 @@ import QuestionCard from "../components/QuestionCard";
 import AnsweredCard from "../components/AnsweredCard";
 import { apiFetch, ApiError } from "../api/client";
 import { estimateConfidence, type EstimatedAnswer } from "../utils/confidenceEstimator";
+import { buildPipelineSteps } from "../constants/pipelineSteps";
+import type { IngestStatus } from "../types/ingest";
 
 /* ---- Types (mirrors backend Pydantic schemas) ---- */
 
@@ -20,20 +22,6 @@ type QuestionResponse = {
 type QuestionsListResponse = {
   session_id: string;
   questions: QuestionResponse[];
-};
-
-type IngestStatus = {
-  ingest_job_id: string;
-  schema: {
-    columns: { name: string; type: string; nullable_pct: number }[];
-    row_count: number;
-  } | null;
-  quality_report: {
-    status: string;
-    issues: { severity: string; description: string; count: number; sample_rows: number[] }[];
-  } | null;
-  status: string;
-  validated_at: string | null;
 };
 
 type ParsedAnswerLocal = {
@@ -53,16 +41,6 @@ type AnswerSubmitResponse = {
   }[];
   ready_to_generate: boolean;
 };
-
-/* ---- Pipeline steps ---- */
-
-const pipelineSteps = () => [
-  { label: "Ingest", status: "completed" as const },
-  { label: "Questions", status: "active" as const },
-  { label: "Narratives", status: "inactive" as const },
-  { label: "Verify", status: "inactive" as const },
-  { label: "Render", status: "inactive" as const },
-];
 
 /* ---- Component ---- */
 
@@ -87,6 +65,24 @@ export default function ClarifyingQuestions() {
   // Submit state
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const storageKey = `qa-answers-${deckId}`;
+
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved) as [string, ParsedAnswerLocal][];
+        setAnsweredQuestions(new Map(parsed));
+      }
+    } catch { /* ignore corrupt storage */ }
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (answeredQuestions.size > 0) {
+      sessionStorage.setItem(storageKey, JSON.stringify([...answeredQuestions.entries()]));
+    }
+  }, [answeredQuestions, storageKey]);
 
   // Aria live ref
   const liveRegionRef = useRef<HTMLDivElement>(null);
@@ -154,7 +150,7 @@ export default function ClarifyingQuestions() {
 
     const estimate: EstimatedAnswer = estimateConfidence(text);
 
-    if (estimate.confidence >= 0.7) {
+    if (estimate.confidence >= 0.4) {
       // High confidence -- collapse and advance
       const newAnswered = new Map(answeredQuestions);
       newAnswered.set(activeQuestion.id, {
@@ -234,30 +230,41 @@ export default function ClarifyingQuestions() {
 
   const handleEdit = async (questionIndex: number) => {
     if (!deckId) return;
+    const oldQuestion = questions[questionIndex];
+    const previousAnswer = answeredQuestions.get(oldQuestion.id);
 
-    // Capture from current state FIRST, before any async work
-    const question = questions[questionIndex];
-    const previousAnswer = answeredQuestions.get(question.id);
-
-    // Fetch fresh session to avoid 409 on resubmission
     try {
       const freshData = await apiFetch<QuestionsListResponse>(
         `/api/v1/decks/${deckId}/questions`
       );
+
+      const newAnswered = new Map<string, ParsedAnswerLocal>();
+      for (const newQ of freshData.questions) {
+        for (const [oldId, answer] of answeredQuestions.entries()) {
+          const oldQ = questions.find((q) => q.id === oldId);
+          if (oldQ && oldQ.template === newQ.template) {
+            newAnswered.set(newQ.id, answer);
+            break;
+          }
+        }
+      }
+
+      const editedNewQ = freshData.questions[questionIndex];
+      if (editedNewQ) newAnswered.delete(editedNewQ.id);
+
       setSessionId(freshData.session_id);
       setQuestions(freshData.questions);
-    } catch (e) {
-      // If we can't get a fresh session, continue with existing one
-      // The user can still edit locally, just the final submit might need retry
+      setAnsweredQuestions(newAnswered);
+    } catch {
+      const newAnswered = new Map(answeredQuestions);
+      newAnswered.delete(oldQuestion.id);
+      setAnsweredQuestions(newAnswered);
     }
 
-    const newAnswered = new Map(answeredQuestions);
-    newAnswered.delete(question.id);
-    setAnsweredQuestions(newAnswered);
     setActiveQuestionIndex(questionIndex);
     setCurrentAnswerText(previousAnswer?.text || "");
     setFollowUpActive(false);
-    announce(`Editing answer for: ${question.template}`);
+    announce(`Editing answer for: ${oldQuestion.template}`);
   };
 
   const handleGenerateNarratives = async () => {
@@ -288,6 +295,7 @@ export default function ClarifyingQuestions() {
       );
 
       if (response.ready_to_generate) {
+        sessionStorage.removeItem(storageKey);
         setSubmitting(false);
         navigate(`/decks/${deckId}/narratives`);
       } else {
@@ -321,6 +329,7 @@ export default function ClarifyingQuestions() {
             }
           );
           if (retryResponse.ready_to_generate) {
+            sessionStorage.removeItem(storageKey);
             setSubmitting(false);
             navigate(`/decks/${deckId}/narratives`);
           } else {
@@ -355,7 +364,7 @@ export default function ClarifyingQuestions() {
 
   if (loading) {
     return (
-      <AppShell steps={pipelineSteps()}>
+      <AppShell steps={buildPipelineSteps(1)}>
         <p style={{ color: "#6b7280" }}>Loading questions...</p>
       </AppShell>
     );
@@ -363,7 +372,7 @@ export default function ClarifyingQuestions() {
 
   if (error && !ingestData) {
     return (
-      <AppShell steps={pipelineSteps()}>
+      <AppShell steps={buildPipelineSteps(1)}>
         <div style={{ padding: 24, background: "#fef2f2", borderRadius: 8, color: "#991b1b" }}>
           {error}
           {error.includes("validation") && (
@@ -385,7 +394,7 @@ export default function ClarifyingQuestions() {
 
   if (questions.length === 0) {
     return (
-      <AppShell steps={pipelineSteps()}>
+      <AppShell steps={buildPipelineSteps(1)}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: "#111827", marginBottom: 8 }}>
           Clarifying Questions
         </h1>
@@ -406,7 +415,7 @@ export default function ClarifyingQuestions() {
             cursor: "pointer",
           }}
         >
-          Generate Narratives
+          Generate Story Options
         </button>
       </AppShell>
     );
@@ -414,9 +423,9 @@ export default function ClarifyingQuestions() {
 
   // Derive context strip values
   const fileName = "Uploaded Data"; // ingest-status doesn't expose filename; use fallback
-  const rowCount = ingestData.schema?.row_count ?? 0;
-  const columnCount = ingestData.schema?.columns.length ?? 0;
-  const issuesCount = ingestData.quality_report?.issues?.length ?? 0;
+  const rowCount = 0;
+  const columnCount = ingestData.schema ? Object.keys(ingestData.schema).length : 0;
+  const issuesCount = (ingestData.quality_report?.quality_issues ?? ingestData.quality_report?.issues ?? []).length;
 
   // Split questions into answered (above) and active/remaining
   const answeredAbove = questions
@@ -427,7 +436,7 @@ export default function ClarifyingQuestions() {
     .filter((q) => answeredQuestions.has(q.id));
 
   return (
-    <AppShell steps={pipelineSteps()}>
+    <AppShell steps={buildPipelineSteps(1)}>
       {/* Aria live region for announcements */}
       <div
         ref={liveRegionRef}
@@ -601,7 +610,7 @@ export default function ClarifyingQuestions() {
             position: "relative",
           }}
         >
-          {submitting ? "Analyzing data and generating narrative options..." : "Generate Narratives"}
+          {submitting ? "Analyzing data and generating story options..." : "Generate Story Options"}
         </button>
         {canGenerate && !allQuestionsHandled && (
           <p style={{ fontSize: 13, color: "#6b7280", marginTop: 8 }}>

@@ -23,7 +23,7 @@ class ApplyFixParameters(BaseModel):
 class ApplyFixRequest(BaseModel):
     report_id: UUID
     check_name: str
-    fix_type: Literal["exclude_rows"]
+    fix_type: Literal["exclude_rows", "recalculate"]
     parameters: ApplyFixParameters
 
 
@@ -70,6 +70,7 @@ class VerifyResponse(BaseModel):
     figure_traces: list[FigureTrace]
     assumptions: list[AssumptionItem] = []
     assumption_actions: list[dict[str, Any]] = []
+    verified_at: str | None = None
 
 
 class SourceRowsResponse(BaseModel):

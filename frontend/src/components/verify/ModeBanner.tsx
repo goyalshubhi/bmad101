@@ -2,11 +2,12 @@ type ModeBannerProps = {
   passed: boolean;
   failCount: number;
   totalChecks: number;
+  unsignedAssumptionCount?: number;
   mode: "blocking" | "readonly";
   verifiedAt?: string;
 };
 
-export default function ModeBanner({ passed, failCount, totalChecks, mode, verifiedAt }: ModeBannerProps) {
+export default function ModeBanner({ passed, failCount, totalChecks, unsignedAssumptionCount = 0, mode, verifiedAt }: ModeBannerProps) {
   if (mode === "readonly") {
     return (
       <div
@@ -31,12 +32,20 @@ export default function ModeBanner({ passed, failCount, totalChecks, mode, verif
     );
   }
 
-  const bg = passed ? "#f0fdf4" : "#fef2f2";
-  const color = passed ? "#166534" : "#991b1b";
-  const icon = passed ? "✓" : "✗";
-  const text = passed
-    ? "ALL CHECKS PASSED"
-    : `${failCount} OF ${totalChecks} CHECKS FAILED — FIX REQUIRED`;
+  const allClear = passed && unsignedAssumptionCount === 0;
+  const bg = allClear ? "#f0fdf4" : "#fef2f2";
+  const color = allClear ? "#166534" : "#991b1b";
+  const icon = allClear ? "✓" : "✗";
+
+  let text: string;
+  if (allClear) {
+    text = "ALL CHECKS PASSED";
+  } else {
+    const parts: string[] = [];
+    if (failCount > 0) parts.push(`${failCount} of ${totalChecks} checks failed`);
+    if (unsignedAssumptionCount > 0) parts.push(`${unsignedAssumptionCount} assumption${unsignedAssumptionCount !== 1 ? "s" : ""} need review`);
+    text = parts.join(" · ").toUpperCase() + " — ACTION REQUIRED";
+  }
 
   return (
     <div

@@ -52,7 +52,7 @@ export default function GateStatusBar({
             textDecoration: "underline",
           }}
         >
-          ← Back to Narrative
+          ← Back to Story Options
         </button>
 
         {mode === "blocking" && totalBlockers > 0 && (
@@ -107,7 +107,7 @@ export default function GateStatusBar({
               cursor: canProceed ? "pointer" : "not-allowed",
             }}
           >
-            Proceed to Render →
+            Generate Deck →
           </button>
         )}
       </div>

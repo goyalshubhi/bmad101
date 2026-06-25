@@ -22,11 +22,11 @@ const statusIcon: Record<Step["status"], string> = {
 };
 
 const stepRoutes: Record<string, string> = {
-  Ingest: "validate",
+  Upload: "validate",
   Questions: "questions",
-  Narratives: "narratives",
+  "Story Options": "narratives",
   Verify: "verify",
-  Render: "render",
+  "Generate Deck": "render",
 };
 
 export default function ProgressRail({ steps }: ProgressRailProps) {
@@ -38,7 +38,7 @@ export default function ProgressRail({ steps }: ProgressRailProps) {
     const route = stepRoutes[step.label];
     if (!route) return;
 
-    if (step.label === "Ingest" && !deckId) {
+    if (step.label === "Upload" && !deckId) {
       navigate("/");
       return;
     }
@@ -62,10 +62,10 @@ export default function ProgressRail({ steps }: ProgressRailProps) {
       }}
     >
       <h2 style={{ fontSize: 14, fontWeight: 600, color: "#6b7280", marginBottom: 16, textTransform: "uppercase", letterSpacing: 1 }}>
-        Pipeline
+        Steps
       </h2>
       {steps.map((step, i) => {
-        const isClickable = step.status !== "inactive" && (deckId || step.label === "Ingest");
+        const isClickable = step.status !== "inactive" && (deckId || step.label === "Upload");
         return (
           <div
             key={i}
@@ -100,6 +100,33 @@ export default function ProgressRail({ steps }: ProgressRailProps) {
           </div>
         );
       })}
+
+      <div style={{ marginTop: "auto", borderTop: "1px solid #e5e7eb", paddingTop: 12 }}>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => navigate("/")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              navigate("/");
+            }
+          }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "10px 8px",
+            borderRadius: 6,
+            cursor: "pointer",
+            color: "#6b7280",
+            fontSize: 14,
+            fontWeight: 500,
+          }}
+        >
+          ← Back to Home
+        </div>
+      </div>
     </nav>
   );
 }

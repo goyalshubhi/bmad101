@@ -86,6 +86,7 @@ async def ingest_file(
             ]),
         )
     )
+    await db.execute(delete(IngestJob).where(IngestJob.deck_id == deck_id))
     logger.info("Invalidated downstream artifacts for deck %s on re-ingest", deck_id)
 
     status = quality_result["status"]
@@ -97,6 +98,7 @@ async def ingest_file(
         schema_json=schema,
         quality_report=quality_result,
         status=status,
+        validated_at=validated_at,
     )
     db.add(job)
     await db.commit()
@@ -168,7 +170,7 @@ async def validate_acknowledge(
 
     job.validated_at = datetime.now(timezone.utc)
 
-    issues_count = len(job.quality_report.get("issues", [])) if job.quality_report else 0
+    issues_count = len(job.quality_report.get("quality_issues", job.quality_report.get("issues", []))) if job.quality_report else 0
 
     audit_entry = AuditLog(
         deck_id=deck_id,

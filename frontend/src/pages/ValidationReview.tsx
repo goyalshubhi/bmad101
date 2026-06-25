@@ -2,22 +2,10 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AppShell from "../layouts/AppShell";
 import { apiFetch, ApiError } from "../api/client";
-
-type QualityIssue = { severity: string; description: string; count: number; sample_rows?: number[] };
+import { buildPipelineSteps } from "../constants/pipelineSteps";
+import type { IngestStatus, QualityIssue } from "../types/ingest";
 
 type SchemaColumn = { name: string; type: string; nullable_pct: number };
-
-type IngestStatus = {
-  ingest_job_id: string;
-  schema: Record<string, { type: string; nullability?: number; cardinality?: number }> | null;
-  quality_report: {
-    status: string;
-    quality_issues?: QualityIssue[];
-    issues?: QualityIssue[];
-  } | null;
-  status: string;
-  validated_at: string | null;
-};
 
 function getIssues(report: IngestStatus["quality_report"]): QualityIssue[] {
   if (!report) return [];
@@ -33,13 +21,10 @@ function getColumns(schema: IngestStatus["schema"]): SchemaColumn[] {
   }));
 }
 
-const pipelineSteps = (status: string) => [
-  { label: "Ingest", status: (status === "CLEAN" || status === "ISSUES_ACKNOWLEDGED") ? "completed" as const : "active" as const },
-  { label: "Questions", status: "inactive" as const },
-  { label: "Narratives", status: "inactive" as const },
-  { label: "Verify", status: "inactive" as const },
-  { label: "Render", status: "inactive" as const },
-];
+const pipelineSteps = (status: string) => {
+  const done = status === "CLEAN" || status === "ISSUES_ACKNOWLEDGED";
+  return buildPipelineSteps(done ? 1 : 0);
+};
 
 const severityColor: Record<string, string> = {
   high: "#dc2626",

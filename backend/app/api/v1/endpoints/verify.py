@@ -36,6 +36,9 @@ def _build_verify_response(
     deck_id: uuid.UUID,
     narrative_assumptions: list | None,
 ) -> VerifyResponse:
+    verified_at = None
+    if report.verified_at:
+        verified_at = report.verified_at.isoformat()
     return VerifyResponse(
         report_id=str(report.id),
         deck_id=str(deck_id),
@@ -45,6 +48,7 @@ def _build_verify_response(
         figure_traces=[FigureTrace(**t) for t in (report.figure_traces or [])],
         assumptions=[AssumptionItem(**a) for a in (narrative_assumptions or [])],
         assumption_actions=report.assumption_actions_json or [],
+        verified_at=verified_at,
     )
 
 
@@ -129,14 +133,31 @@ async def verify_deck(
         )
         db.add(audit_entry)
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("Failed to create audit log for verification: %s", exc)
+        _log.warning("Failed to create audit log for verification: %s", exc)
 
     await db.commit()
     await db.refresh(report)
 
     assumptions = narrative.assumptions_json or []
 
+    return _build_verify_response(report, deck_id, assumptions)
+
+
+@router.get("/decks/{deck_id}/verify", response_model=VerifyResponse)
+async def get_latest_verify(
+    deck_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ReconciliationReport)
+        .where(ReconciliationReport.deck_id == deck_id)
+        .order_by(ReconciliationReport.verified_at.desc())
+    )
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="No verification report found")
+
+    assumptions = await _load_narrative_assumptions(db, report.narrative_id)
     return _build_verify_response(report, deck_id, assumptions)
 
 
@@ -235,7 +256,7 @@ async def apply_fix(
         raise HTTPException(status_code=400, detail=f"Invalid check name: {body.check_name}")
 
     row_ids = body.parameters.row_ids
-    if not row_ids:
+    if body.fix_type == "exclude_rows" and not row_ids:
         raise HTTPException(status_code=400, detail="row_ids must not be empty for exclude_rows fix")
 
     result = await db.execute(
@@ -277,8 +298,9 @@ async def apply_fix(
 
     def _run_fix():
         df = load_dataframe(job.file_url)
-        valid_ids = [i for i in row_ids if 0 <= i < len(df)]
-        df = df.drop(index=valid_ids).reset_index(drop=True)
+        if row_ids:
+            valid_ids = [i for i in row_ids if 0 <= i < len(df)]
+            df = df.drop(index=valid_ids).reset_index(drop=True)
         figures = extract_figures(narrative_text)
         checks = run_all_checks(figures, df, narrative_text, schema)
         traces = trace_figures(figures, df, schema)

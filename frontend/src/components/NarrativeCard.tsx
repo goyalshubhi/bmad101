@@ -41,7 +41,6 @@ function confidenceLabel(score: number): string {
 }
 
 export default function NarrativeCard({ narrative, isSelected, isExpanded, isModified, onSelect, onClick }: Props) {
-  const pct = Math.round(narrative.overall_confidence * 100);
   const color = confidenceColor(narrative.overall_confidence);
   const hasInferred = narrative.assumptions.some((a) => a.flag_type === "INFERRED");
   const summary = narrative.narrative_text.length > 200
@@ -105,14 +104,15 @@ export default function NarrativeCard({ narrative, isSelected, isExpanded, isMod
 
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <span
-          aria-label={`Confidence: ${pct}%, ${confidenceLabel(narrative.overall_confidence)}`}
+          aria-label={`Confidence: ${confidenceLabel(narrative.overall_confidence)}`}
           style={{
             display: "inline-block", fontSize: 13, fontWeight: 600,
             color: "#fff", background: color,
             padding: "2px 10px", borderRadius: 12,
+            textTransform: "capitalize",
           }}
         >
-          {pct}%
+          {confidenceLabel(narrative.overall_confidence)}
         </span>
 
         <span style={{

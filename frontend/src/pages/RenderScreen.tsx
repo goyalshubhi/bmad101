@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AppShell from "../layouts/AppShell";
 import { apiFetch, ApiError, BASE_URL } from "../api/client";
+import { buildPipelineSteps } from "../constants/pipelineSteps";
 
 type RenderResponse = {
   deck_id: string;
@@ -10,21 +11,6 @@ type RenderResponse = {
   status: string;
 };
 
-const loadingSteps = () => [
-  { label: "Ingest", status: "completed" as const },
-  { label: "Questions", status: "completed" as const },
-  { label: "Narratives", status: "completed" as const },
-  { label: "Verify", status: "completed" as const },
-  { label: "Render", status: "active" as const },
-];
-
-const doneSteps = () => [
-  { label: "Ingest", status: "completed" as const },
-  { label: "Questions", status: "completed" as const },
-  { label: "Narratives", status: "completed" as const },
-  { label: "Verify", status: "completed" as const },
-  { label: "Render", status: "completed" as const },
-];
 
 export default function RenderScreen() {
   const { deckId } = useParams<{ deckId: string }>();
@@ -53,10 +39,12 @@ export default function RenderScreen() {
 
     (async () => {
       try {
-        const result = await apiFetch<RenderResponse>(
-          `/api/v1/decks/${deckId}/render`,
-          { method: "POST" }
-        );
+        let result: RenderResponse;
+        try {
+          result = await apiFetch<RenderResponse>(`/api/v1/decks/${deckId}/render/status`);
+        } catch {
+          result = await apiFetch<RenderResponse>(`/api/v1/decks/${deckId}/render`, { method: "POST" });
+        }
         if (cancelled) return;
         setRenderResult(result);
         setLoading(false);
@@ -70,25 +58,19 @@ export default function RenderScreen() {
       }
     })();
 
-    return () => {
-      cancelled = true;
-      renderFiredRef.current = false;
-    };
+    return () => { cancelled = true; };
   }, [deckId]);
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (!deckId || downloading) return;
     setDownloading(true);
-    try {
-      const link = document.createElement("a");
-      link.href = `${BASE_URL}/api/v1/decks/${deckId}/render/download`;
-      link.download = `deck_v${renderResult?.version || 1}.pptx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } finally {
-      setDownloading(false);
-    }
+    const link = document.createElement("a");
+    link.href = `${BASE_URL}/api/v1/decks/${deckId}/render/download`;
+    link.download = `deck_v${renderResult?.version || 1}.pptx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => setDownloading(false), 1500);
   };
 
   const retryRef = useRef(false);
@@ -123,7 +105,7 @@ export default function RenderScreen() {
     })();
   };
 
-  const steps = renderResult ? doneSteps() : loadingSteps();
+  const steps = buildPipelineSteps(renderResult ? 5 : 4);
 
   if (loading) {
     return (
@@ -312,7 +294,7 @@ export default function RenderScreen() {
             {downloading ? "Downloading..." : "Download PPTX"}
           </button>
 
-          <div>
+          <div style={{ display: "flex", gap: 16, justifyContent: "center" }}>
             <button
               type="button"
               onClick={() => navigate(`/decks/${deckId}/verify?mode=readonly`)}
@@ -328,6 +310,22 @@ export default function RenderScreen() {
               }}
             >
               ← Back to Verification
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              style={{
+                padding: "8px 16px",
+                fontSize: 14,
+                fontWeight: 500,
+                color: "#6b7280",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                textDecoration: "underline",
+              }}
+            >
+              Start Over
             </button>
           </div>
         </div>

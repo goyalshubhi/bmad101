@@ -1,12 +1,7 @@
 import ProgressRail from "../components/ProgressRail";
+import { buildPipelineSteps } from "../constants/pipelineSteps";
 
-const defaultSteps = [
-  { label: "Ingest", status: "inactive" as const },
-  { label: "Questions", status: "inactive" as const },
-  { label: "Narratives", status: "inactive" as const },
-  { label: "Verify", status: "inactive" as const },
-  { label: "Render", status: "inactive" as const },
-];
+const defaultSteps = buildPipelineSteps(-1);
 
 type AppShellProps = {
   children?: React.ReactNode;

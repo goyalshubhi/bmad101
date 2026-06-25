@@ -72,6 +72,23 @@ export default function QuestionCard({
         borderLeft: "4px solid #2563eb",
       }}
     >
+      {/* Required / Optional badge */}
+      <span style={{
+        display: "inline-block",
+        fontSize: 11,
+        fontWeight: 700,
+        textTransform: "uppercase",
+        letterSpacing: "0.05em",
+        padding: "2px 8px",
+        borderRadius: 4,
+        marginBottom: 8,
+        ...(question.tier === 1
+          ? { color: "#991b1b", background: "#fef2f2", border: "1px solid #fecaca" }
+          : { color: "#6b7280", background: "#f3f4f6", border: "1px solid #e5e7eb" }),
+      }}>
+        {question.tier === 1 ? "Required" : "Optional"}
+      </span>
+
       {/* Data observation / context */}
       {question.context && (
         <p

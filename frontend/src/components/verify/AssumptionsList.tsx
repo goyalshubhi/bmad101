@@ -14,9 +14,9 @@ type AssumptionsListProps = {
 const FLAG_ORDER: AssumptionItem["flag_type"][] = ["EXPLICIT", "PATTERN", "INFERRED"];
 
 const FLAG_LABELS: Record<string, { label: string; color: string; bgColor: string }> = {
-  EXPLICIT: { label: "Explicit", color: "#166534", bgColor: "#dcfce7" },
-  PATTERN: { label: "Pattern", color: "#92400e", bgColor: "#fef3c7" },
-  INFERRED: { label: "Inferred", color: "#991b1b", bgColor: "#fef2f2" },
+  EXPLICIT: { label: "Stated in data", color: "#166534", bgColor: "#dcfce7" },
+  PATTERN: { label: "Detected pattern", color: "#92400e", bgColor: "#fef3c7" },
+  INFERRED: { label: "System inference", color: "#991b1b", bgColor: "#fef2f2" },
 };
 
 function getActionForIndex(actions: AssumptionAction[], index: number): AssumptionAction | undefined {
@@ -93,9 +93,9 @@ export default function AssumptionsList({
               </span>
               <span style={{ fontWeight: 400, fontSize: 13, color: "#6b7280" }}>
                 ({items.length})
-                {flagType === "EXPLICIT" && " — display only, no action needed"}
-                {flagType === "PATTERN" && " — requires acknowledgment"}
-                {flagType === "INFERRED" && " — requires sign-off"}
+                {flagType === "EXPLICIT" && " — for your reference, no action needed"}
+                {flagType === "PATTERN" && " — please review and acknowledge"}
+                {flagType === "INFERRED" && " — please review and approve"}
               </span>
             </h3>
 
@@ -132,7 +132,7 @@ export default function AssumptionsList({
                           {item.text}
                         </p>
                         <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 0 0" }}>
-                          Confidence: {Math.round(item.confidence * 100)}% &middot; Source: {item.source_reference}
+                          Source: {item.source_reference}
                         </p>
                       </div>
 
@@ -157,6 +157,7 @@ export default function AssumptionsList({
                               type="button"
                               onClick={() => handleAction(item.originalIndex, () => onAcknowledge(item.originalIndex))}
                               disabled={isSubmitting}
+                              title="Confirm you've reviewed this and it's acceptable"
                               aria-label={`Acknowledge assumption: ${item.text}`}
                               style={{
                                 padding: "6px 12px",
@@ -175,6 +176,7 @@ export default function AssumptionsList({
                               type="button"
                               onClick={() => onChallenge(item.originalIndex)}
                               disabled={isSubmitting}
+                              title="Flag this as incorrect and return to edit the narrative"
                               aria-label={`Challenge assumption: ${item.text}`}
                               style={{
                                 padding: "6px 12px",
@@ -198,6 +200,7 @@ export default function AssumptionsList({
                               type="button"
                               onClick={() => handleAction(item.originalIndex, () => onSignOff(item.originalIndex))}
                               disabled={isSubmitting}
+                              title="Approve this system-generated assumption as correct"
                               aria-label={`Sign off assumption: ${item.text}`}
                               style={{
                                 padding: "6px 12px",
@@ -210,12 +213,13 @@ export default function AssumptionsList({
                                 cursor: isSubmitting ? "not-allowed" : "pointer",
                               }}
                             >
-                              {isSubmitting ? "..." : "Sign off"}
+                              {isSubmitting ? "..." : "Approve"}
                             </button>
                             <button
                               type="button"
                               onClick={() => handleAction(item.originalIndex, () => onReject(item.originalIndex))}
                               disabled={isSubmitting}
+                              title="Reject this assumption and return to edit the narrative"
                               aria-label={`Reject assumption: ${item.text}`}
                               style={{
                                 padding: "6px 12px",

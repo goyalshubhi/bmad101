@@ -7,6 +7,7 @@ import type { NarrativeData } from "../components/NarrativeCard";
 import NarrativeDetailPanel from "../components/NarrativeDetailPanel";
 import QASummaryBar from "../components/QASummaryBar";
 import { apiFetch, ApiError } from "../api/client";
+import { buildPipelineSteps } from "../constants/pipelineSteps";
 
 type QASummaryItem = {
   id: string;
@@ -29,13 +30,6 @@ type QuestionsListResponse = {
   questions: unknown[];
 };
 
-const pipelineSteps = () => [
-  { label: "Ingest", status: "completed" as const },
-  { label: "Questions", status: "completed" as const },
-  { label: "Narratives", status: "active" as const },
-  { label: "Verify", status: "inactive" as const },
-  { label: "Render", status: "inactive" as const },
-];
 
 export default function NarrativePicker() {
   const { deckId } = useParams<{ deckId: string }>();
@@ -156,7 +150,7 @@ export default function NarrativePicker() {
 
   if (loading) {
     return (
-      <AppShell steps={pipelineSteps()}>
+      <AppShell steps={buildPipelineSteps(2)}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: "#111827", marginBottom: 8 }}>
           Narrative Options
         </h1>
@@ -174,7 +168,7 @@ export default function NarrativePicker() {
 
   if (error) {
     return (
-      <AppShell steps={pipelineSteps()}>
+      <AppShell steps={buildPipelineSteps(2)}>
         <div style={{ padding: 24, background: "#fef2f2", borderRadius: 8, color: "#991b1b" }}>
           {error}
         </div>
@@ -184,7 +178,7 @@ export default function NarrativePicker() {
 
   if (narratives.length === 0) {
     return (
-      <AppShell steps={pipelineSteps()}>
+      <AppShell steps={buildPipelineSteps(2)}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: "#111827", marginBottom: 8 }}>
           Narrative Options
         </h1>
@@ -196,7 +190,7 @@ export default function NarrativePicker() {
   }
 
   return (
-    <AppShell steps={pipelineSteps()}>
+    <AppShell steps={buildPipelineSteps(2)}>
       <div
         ref={liveRegionRef}
         aria-live="polite"

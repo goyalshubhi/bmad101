@@ -58,6 +58,7 @@ export type VerifyResponse = {
   figure_traces: FigureTrace[];
   assumptions: AssumptionItem[];
   assumption_actions: AssumptionAction[];
+  verified_at: string | null;
 };
 
 export type SourceRowsResponse = {
