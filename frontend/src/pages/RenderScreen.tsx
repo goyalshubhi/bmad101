@@ -7,8 +7,13 @@ import { buildPipelineSteps } from "../constants/pipelineSteps";
 type RenderResponse = {
   deck_id: string;
   version: number;
-  pptx_url: string;
+  download_url: string;
   status: string;
+};
+
+type RenderStatusResponse = {
+  status: string;
+  download_url: string | null;
 };
 
 
@@ -22,7 +27,6 @@ export default function RenderScreen() {
   const [downloading, setDownloading] = useState(false);
 
   const liveRegionRef = useRef<HTMLDivElement>(null);
-  const renderFiredRef = useRef(false);
 
   const announce = (message: string) => {
     if (liveRegionRef.current) {
@@ -31,8 +35,7 @@ export default function RenderScreen() {
   };
 
   useEffect(() => {
-    if (!deckId || renderFiredRef.current) return;
-    renderFiredRef.current = true;
+    if (!deckId) return;
     let cancelled = false;
 
     announce("Generating boardroom-ready deck...");
@@ -40,9 +43,10 @@ export default function RenderScreen() {
     (async () => {
       try {
         let result: RenderResponse;
-        try {
-          result = await apiFetch<RenderResponse>(`/api/v1/decks/${deckId}/render/status`);
-        } catch {
+        const statusResp = await apiFetch<RenderStatusResponse>(`/api/v1/decks/${deckId}/render/status`);
+        if (statusResp.status === "complete" && statusResp.download_url) {
+          result = { deck_id: deckId, version: 1, download_url: statusResp.download_url, status: "rendered" };
+        } else {
           result = await apiFetch<RenderResponse>(`/api/v1/decks/${deckId}/render`, { method: "POST" });
         }
         if (cancelled) return;
@@ -62,11 +66,11 @@ export default function RenderScreen() {
   }, [deckId]);
 
   const handleDownload = () => {
-    if (!deckId || downloading) return;
+    if (!deckId || downloading || !renderResult) return;
     setDownloading(true);
     const link = document.createElement("a");
-    link.href = `${BASE_URL}/api/v1/decks/${deckId}/render/download`;
-    link.download = `deck_v${renderResult?.version || 1}.pptx`;
+    link.href = `${BASE_URL}${renderResult.download_url}`;
+    link.download = `deck_v${renderResult.version || 1}.pptx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

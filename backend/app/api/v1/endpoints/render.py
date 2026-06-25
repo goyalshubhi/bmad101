@@ -1,9 +1,10 @@
 import asyncio
 import logging
+import os
 import uuid
 
 from fastapi import APIRouter, HTTPException, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
 from sqlalchemy import select, func as sa_func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,9 +18,9 @@ from app.models.ingest_job import IngestJob
 from app.models.narrative import Narrative
 from app.models.question_session import QuestionSession
 from app.models.reconciliation_report import ReconciliationReport
-from app.services.render.pptx_builder import build_pptx, RenderContext
-from app.services.storage import upload_file, download_file
-from app.api.v1.schemas.render import RenderResponse
+from app.services.render.pptx_builder import build_pptx, RenderContext, VerificationGateError
+from app.services.storage import UPLOADS_DIR
+from app.api.v1.schemas.render import RenderResponse, RenderStatusResponse
 
 logger = logging.getLogger(__name__)
 
@@ -61,9 +62,14 @@ def _build_reconciliation_summary(checks_json: dict | list | None) -> dict:
     }
 
 
-def _merge_qa(questions_json: list | None, answers_json: list | None) -> list[dict]:
+def _merge_qa(questions_json: list | None, answers_json: dict | list | None) -> list[dict]:
     questions = questions_json or []
-    answers = answers_json or []
+    if isinstance(answers_json, dict):
+        answers = answers_json.get("parsed", [])
+    elif isinstance(answers_json, list):
+        answers = answers_json
+    else:
+        answers = []
     answer_map = {}
     for a in answers:
         if isinstance(a, dict):
@@ -80,6 +86,41 @@ def _merge_qa(questions_json: list | None, answers_json: list | None) -> list[di
                 "answer": answer_map.get(qid, "Not answered"),
             })
     return result
+
+
+def _save_pptx(pptx_bytes: bytes, deck_id: uuid.UUID, version: int) -> str:
+    os.makedirs(str(UPLOADS_DIR), exist_ok=True)
+    filename = f"deck_v{version}.pptx"
+    deck_dir = os.path.join(str(UPLOADS_DIR), str(deck_id))
+    os.makedirs(deck_dir, exist_ok=True)
+    file_path = os.path.join(deck_dir, filename)
+    with open(file_path, "wb") as f:
+        f.write(pptx_bytes)
+    logger.info("PPTX saved: %s (%d bytes)", file_path, len(pptx_bytes))
+    return file_path
+
+
+def _resolve_pptx_path(deck_id: uuid.UUID, pptx_url: str) -> str | None:
+    if pptx_url.startswith("local://"):
+        key = pptx_url[len("local://"):]
+    else:
+        key = pptx_url
+
+    file_path = os.path.join(str(UPLOADS_DIR), key)
+    if os.path.isfile(file_path):
+        return file_path
+
+    # Fallback: scan deck directory for latest version
+    deck_dir = os.path.join(str(UPLOADS_DIR), str(deck_id))
+    if os.path.isdir(deck_dir):
+        pptx_files = sorted(
+            [f for f in os.listdir(deck_dir) if f.endswith(".pptx")],
+            reverse=True,
+        )
+        if pptx_files:
+            return os.path.join(deck_dir, pptx_files[0])
+
+    return None
 
 
 @router.post("/decks/{deck_id}/render", response_model=RenderResponse)
@@ -147,7 +188,7 @@ async def render_deck(
     data_source_filename = _extract_filename(ingest_job.file_url if ingest_job else None)
     quality_issues = []
     if ingest_job and isinstance(ingest_job.quality_report, dict):
-        quality_issues = ingest_job.quality_report.get("issues", [])
+        quality_issues = ingest_job.quality_report.get("quality_issues", ingest_job.quality_report.get("issues", []))
 
     qa_pairs = _merge_qa(
         question_session.questions_json if question_session else None,
@@ -163,8 +204,8 @@ async def render_deck(
         deck_name=deck.name,
         data_source_filename=data_source_filename,
         narrative_text=final_text,
-        narrative_confidence=narrative.overall_confidence,
-        story_angle=narrative.story_angle,
+        narrative_confidence=float(narrative.overall_confidence or 0),
+        story_angle=narrative.story_angle or "",
         viz_recommendation=narrative.viz_recommendation,
         assumptions=narrative.assumptions_json or [],
         questions_and_answers=qa_pairs,
@@ -181,6 +222,8 @@ async def render_deck(
         logger.exception("PPTX build failed for deck %s", deck_id)
         raise HTTPException(status_code=500, detail="Failed to build PPTX")
 
+    logger.info("PPTX built for deck %s: %d bytes", deck_id, len(pptx_bytes))
+
     max_retries = 3
     for attempt in range(max_retries):
         version_result = await db.execute(
@@ -189,7 +232,8 @@ async def render_deck(
         existing_count = version_result.scalar() or 0
         version = existing_count + 1
 
-        pptx_url = await upload_file(pptx_bytes, f"{deck_id}/deck_v{version}.pptx")
+        file_path = await asyncio.to_thread(_save_pptx, pptx_bytes, deck_id, version)
+        pptx_url = f"local://{deck_id}/deck_v{version}.pptx"
 
         deck_output = DeckOutput(
             deck_id=deck_id,
@@ -222,12 +266,30 @@ async def render_deck(
                 continue
             raise HTTPException(status_code=409, detail="Version conflict after retries, please try again")
 
+        download_url = f"/api/v1/decks/{deck_id}/render/download"
         return RenderResponse(
             deck_id=str(deck_id),
             version=version,
-            pptx_url=pptx_url,
+            download_url=download_url,
             status="rendered",
         )
+
+
+@router.get("/decks/{deck_id}/render/status", response_model=RenderStatusResponse)
+async def render_status(deck_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    output_result = await db.execute(
+        select(DeckOutput)
+        .where(DeckOutput.deck_id == deck_id)
+        .order_by(DeckOutput.rendered_at.desc())
+        .limit(1)
+    )
+    deck_output = output_result.scalar_one_or_none()
+    if not deck_output:
+        return RenderStatusResponse(status="processing")
+    return RenderStatusResponse(
+        status="complete",
+        download_url=f"/api/v1/decks/{deck_id}/render/download",
+    )
 
 
 @router.get("/decks/{deck_id}/render/download")
@@ -246,25 +308,12 @@ async def download_deck(deck_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     if not pptx_url:
         raise HTTPException(status_code=404, detail="Rendered deck has no storage URL")
 
-    try:
-        pptx_bytes = await asyncio.to_thread(download_file, pptx_url)
-    except Exception:
-        logger.exception("Download failed for %s", pptx_url)
-        raise HTTPException(status_code=502, detail="Failed to retrieve file from storage")
+    file_path = _resolve_pptx_path(deck_id, pptx_url)
+    if not file_path:
+        raise HTTPException(status_code=404, detail="PPTX file not found on disk")
 
-    if pptx_bytes is None:
-        raise HTTPException(status_code=404, detail="PPTX file not found in storage")
-
-    filename = f"deck_v{deck_output.version}.pptx"
-
-    async def _stream():
-        yield pptx_bytes
-
-    return StreamingResponse(
-        _stream(),
+    return FileResponse(
+        path=file_path,
+        filename=f"deck_v{deck_output.version}.pptx",
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Content-Length": str(len(pptx_bytes)),
-        },
     )

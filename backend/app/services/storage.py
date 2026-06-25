@@ -19,10 +19,11 @@ def _sanitize_filename(filename: str) -> str:
     return safe
 
 
-def _upload_sync(file_data: bytes, filename: str) -> str:
+def _upload_sync(file_data: bytes, filename: str, *, file_key: str | None = None) -> str:
     _ensure_dir()
-    safe_name = _sanitize_filename(filename)
-    file_key = f"{uuid.uuid4()}/{safe_name}"
+    if file_key is None:
+        safe_name = _sanitize_filename(filename)
+        file_key = f"{uuid.uuid4()}/{safe_name}"
     dest = UPLOADS_DIR / file_key
     if not dest.resolve().is_relative_to(UPLOADS_DIR):
         raise ValueError("Path traversal detected in upload filename")
@@ -31,8 +32,8 @@ def _upload_sync(file_data: bytes, filename: str) -> str:
     return f"local://{file_key}"
 
 
-async def upload_file(file_data: bytes, filename: str) -> str:
-    return await asyncio.to_thread(_upload_sync, file_data, filename)
+async def upload_file(file_data: bytes, filename: str, *, file_key: str | None = None) -> str:
+    return await asyncio.to_thread(_upload_sync, file_data, filename, file_key=file_key)
 
 
 def download_file(object_key: str) -> bytes | None:
